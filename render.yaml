@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: stopwatch
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: APP_SESSION_SECRET
+        generateValue: true
+      - key: APP_ENV
+        value: production

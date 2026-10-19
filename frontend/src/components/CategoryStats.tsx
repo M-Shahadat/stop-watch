@@ -48,30 +48,30 @@ export default function CategoryStats({ refreshSignal }: Props) {
         <tbody>
           {data.items.map((item) => (
             <tr key={item.category_id ?? "uncategorized"} className="cat-stats__row">
-              <td className="cat-stats__td">
+              <td className="cat-stats__td" data-label="Category">
                 <span className="cat-stats__dot" style={{ background: item.category_color }} />
                 <span className="cat-stats__name">{item.category_name}</span>
               </td>
-              <td className="cat-stats__td cat-stats__td--num">
+              <td className="cat-stats__td cat-stats__td--num" data-label="Active time">
                 {formatDuration(item.total_active_seconds)}
               </td>
-              <td className="cat-stats__td cat-stats__td--num cat-stats__td--paused">
+              <td className="cat-stats__td cat-stats__td--num cat-stats__td--paused" data-label="Paused time">
                 {formatDuration(item.total_paused_seconds)}
               </td>
-              <td className="cat-stats__td cat-stats__td--num">{item.task_count}</td>
+              <td className="cat-stats__td cat-stats__td--num" data-label="Tasks">{item.task_count}</td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr className="cat-stats__total-row">
-            <td className="cat-stats__td cat-stats__td--total">Total</td>
-            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total">
+            <td className="cat-stats__td cat-stats__td--total" data-label="Category">Total</td>
+            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total" data-label="Active time">
               {formatDuration(data.grand_total_active_seconds)}
             </td>
-            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total cat-stats__td--paused">
+            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total cat-stats__td--paused" data-label="Paused time">
               {formatDuration(data.grand_total_paused_seconds)}
             </td>
-            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total">
+            <td className="cat-stats__td cat-stats__td--num cat-stats__td--total" data-label="Tasks">
               {data.items.reduce((s, i) => s + i.task_count, 0)}
             </td>
           </tr>

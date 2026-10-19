@@ -40,6 +40,7 @@ export default function NewTaskForm({ categories, onCreated }: Props) {
         type="text"
         maxLength={255}
         placeholder="Task name (optional)"
+        aria-label="Task name"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -48,6 +49,7 @@ export default function NewTaskForm({ categories, onCreated }: Props) {
       {categories.length > 0 && (
         <select
           className="cat-select"
+          aria-label="Task category"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
           disabled={loading}

@@ -33,8 +33,22 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
 
   useEffect(() => {
     if (task.status !== "running" || !task.segment_started_at) return;
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | undefined;
+    const syncTimer = () => {
+      if (document.visibilityState === "hidden") {
+        if (id) clearInterval(id);
+        id = undefined;
+        return;
+      }
+      setNow(Date.now());
+      if (!id) id = setInterval(() => setNow(Date.now()), 1000);
+    };
+    syncTimer();
+    document.addEventListener("visibilitychange", syncTimer);
+    return () => {
+      if (id) clearInterval(id);
+      document.removeEventListener("visibilitychange", syncTimer);
+    };
   }, [task.status, task.segment_started_at]);
 
   const elapsed = elapsedAt(task, now);
@@ -104,7 +118,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
           {status === "running" && <span className="task-card__badge task-card__badge--running">Live</span>}
           {status === "paused"  && <span className="task-card__badge task-card__badge--paused">Paused</span>}
           {!editing && (
-            <button className="task-card__edit-btn" title="Edit" onClick={openEdit} disabled={busy}>✏️</button>
+            <button className="task-card__edit-btn" aria-label={`Edit ${task.title}`} onClick={openEdit} disabled={busy}>✏️</button>
           )}
         </div>
       </div>
@@ -161,7 +175,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
                 ■ Stop
               </button>
             )}
-            <button className="btn btn--delete" disabled={busy} onClick={() => handle(() => api.deleteTask(task.id))}>
+            <button className="btn btn--delete" aria-label={`Delete ${task.title}`} disabled={busy} onClick={() => handle(() => api.deleteTask(task.id))}>
               🗑
             </button>
           </>

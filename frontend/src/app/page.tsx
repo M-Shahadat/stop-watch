@@ -101,9 +101,24 @@ export default function HomePage() {
   useEffect(() => {
     const hasRunning = tasks.some((t) => t.status === "running");
     if (!session?.authenticated || !hasRunning) return;
-    const id = setInterval(fetchAll, 3000);
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") fetchAll();
+    }, 30_000);
     return () => clearInterval(id);
   }, [tasks, fetchAll, session?.authenticated]);
+
+  useEffect(() => {
+    if (!session?.authenticated) return;
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible") fetchAll();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    window.addEventListener("focus", refreshOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      window.removeEventListener("focus", refreshOnReturn);
+    };
+  }, [fetchAll, session?.authenticated]);
 
   function handleChange() {
     fetchAll();
@@ -134,14 +149,37 @@ export default function HomePage() {
   return (
     <main className="page">
       <header className="page-header">
-        <h1 className="page-title">Stopwatch</h1>
+        <div className="page-brand">
+          <span className="page-eyebrow">Personal time tracker</span>
+          <h1 className="page-title">Stopwatch</h1>
+          <p className="page-subtitle">Make the time you spend count.</p>
+        </div>
         <div className="page-header-right">
           <DailyTotalBanner refreshSignal={refreshSignal} />
           {session.enabled && <button className="sign-out-btn" onClick={handleLogout}>Sign out</button>}
-          <div className="view-toggle">
+        </div>
+        <div className="page-header-controls">
+          <div className="tab-bar" role="group" aria-label="Section">
+            <button
+              className={`tab-btn${tab === "tasks" ? " tab-btn--active" : ""}`}
+              aria-pressed={tab === "tasks"}
+              onClick={() => setTab("tasks")}
+            >
+              Tasks
+            </button>
+            <button
+              className={`tab-btn${tab === "categories" ? " tab-btn--active" : ""}`}
+              aria-pressed={tab === "categories"}
+              onClick={() => { setTab("categories"); bump(); }}
+            >
+              Categories
+            </button>
+          </div>
+          {tab === "tasks" && <div className="view-toggle" role="group" aria-label="Task layout">
             <button
               className={`view-toggle__btn${viewMode === "grid" ? " view-toggle__btn--active" : ""}`}
-              title="Grid view"
+              aria-label="Grid view"
+              aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -153,7 +191,8 @@ export default function HomePage() {
             </button>
             <button
               className={`view-toggle__btn${viewMode === "list" ? " view-toggle__btn--active" : ""}`}
-              title="List view"
+              aria-label="List view"
+              aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
@@ -162,21 +201,7 @@ export default function HomePage() {
                 <rect x="0" y="11" width="14" height="2" rx="1"/>
               </svg>
             </button>
-          </div>
-          <div className="tab-bar">
-            <button
-              className={`tab-btn${tab === "tasks" ? " tab-btn--active" : ""}`}
-              onClick={() => setTab("tasks")}
-            >
-              Tasks
-            </button>
-            <button
-              className={`tab-btn${tab === "categories" ? " tab-btn--active" : ""}`}
-              onClick={() => { setTab("categories"); bump(); }}
-            >
-              Categories
-            </button>
-          </div>
+          </div>}
         </div>
       </header>
 
@@ -185,6 +210,10 @@ export default function HomePage() {
       {tab === "tasks" && (
         <>
           <section className="new-task-section">
+            <div className="new-task-section__intro">
+              <h2>Start a task</h2>
+              <p>Give it a name or start right away.</p>
+            </div>
             <NewTaskForm categories={categories} onCreated={handleChange} />
           </section>
 
@@ -194,7 +223,7 @@ export default function HomePage() {
             <>
               {active.length > 0 && (
                 <section className="task-section">
-                  <h2 className="section-heading">Active</h2>
+                  <h2 className="section-heading">Active <span className="section-count">{active.length}</span></h2>
                   <div className={`task-grid task-grid--${viewMode}`}>
                     {active.map((t) => (
                       <TaskCard key={t.id} task={t} categories={categories} viewMode={viewMode} onChange={handleChange} />
@@ -205,7 +234,7 @@ export default function HomePage() {
 
               {completed.length > 0 && (
                 <section className="task-section">
-                  <h2 className="section-heading">Completed</h2>
+                  <h2 className="section-heading">Completed <span className="section-count">{completed.length}</span></h2>
                   <div className={`task-grid task-grid--${viewMode}`}>
                     {completed.map((t) => (
                       <TaskCard key={t.id} task={t} categories={categories} viewMode={viewMode} onChange={handleChange} />

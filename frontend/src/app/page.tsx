@@ -7,8 +7,9 @@ import TaskCard from "@/components/TaskCard";
 import DailyTotalBanner from "@/components/DailyTotal";
 import CategoryManager from "@/components/CategoryManager";
 import CategoryStats from "@/components/CategoryStats";
+import HistoryView from "@/components/HistoryView";
 
-type Tab = "tasks" | "categories";
+type Tab = "tasks" | "week" | "month" | "categories";
 type ViewMode = "grid" | "list";
 
 export default function HomePage() {
@@ -197,6 +198,20 @@ export default function HomePage() {
               Tasks
             </button>
             <button
+              className={`tab-btn${tab === "week" ? " tab-btn--active" : ""}`}
+              aria-pressed={tab === "week"}
+              onClick={() => setTab("week")}
+            >
+              Week
+            </button>
+            <button
+              className={`tab-btn${tab === "month" ? " tab-btn--active" : ""}`}
+              aria-pressed={tab === "month"}
+              onClick={() => setTab("month")}
+            >
+              Month
+            </button>
+            <button
               className={`tab-btn${tab === "categories" ? " tab-btn--active" : ""}`}
               aria-pressed={tab === "categories"}
               onClick={() => { setTab("categories"); bump(); }}
@@ -278,6 +293,10 @@ export default function HomePage() {
             </>
           )}
         </>
+      )}
+
+      {(tab === "week" || tab === "month") && (
+        <HistoryView key={tab} period={tab} refreshSignal={refreshSignal} />
       )}
 
       {tab === "categories" && (

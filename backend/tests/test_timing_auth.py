@@ -2,7 +2,7 @@ import os
 import sys
 import unittest
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from http.cookies import SimpleCookie
 from pathlib import Path
 from types import SimpleNamespace
@@ -16,9 +16,9 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 from fastapi import HTTPException, Response  # noqa: E402
 from app.auth import LoginRequest, authenticated, login  # noqa: E402
 from app.database import Base  # noqa: E402
-from app.models import Task  # noqa: E402
+from app.models import Task, TaskInterval  # noqa: E402
 from app.routers.categories import category_stats  # noqa: E402
-from app.routers.tasks import update_task  # noqa: E402
+from app.routers.tasks import task_history, update_task  # noqa: E402
 from app.schemas import TaskUpdate  # noqa: E402
 from app.timing import daily_total_seconds, elapsed_seconds  # noqa: E402
 
@@ -117,6 +117,49 @@ class TimingTests(unittest.TestCase):
 
 
 class TaskEditTests(unittest.TestCase):
+    def test_week_and_month_history_show_overnight_work_and_edits(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            item = Task(
+                title="Night review", status="completed",
+                started_at=moment("2026-10-17T17:50:00+00:00"),
+                segment_started_at=None,
+                stopped_at=moment("2026-10-17T18:10:00+00:00"),
+                accumulated_seconds=1200,
+                duration_seconds=1500,
+                duration_adjustment_seconds=300,
+            )
+            db.add(item)
+            db.flush()
+            db.add(TaskInterval(
+                task_id=item.id,
+                started_at=moment("2026-10-17T17:50:00+00:00"),
+                ended_at=moment("2026-10-17T18:10:00+00:00"),
+                duration_seconds=1200,
+            ))
+            db.commit()
+
+            week = task_history("week", "Asia/Dhaka", date(2026, 10, 18), db)
+            days = {day.date: day for day in week.days}
+            self.assertEqual((week.start_date, week.end_date), ("2026-10-12", "2026-10-18"))
+            self.assertEqual((days["2026-10-17"].total_seconds,
+                              days["2026-10-18"].total_seconds), (600, 900))
+            self.assertEqual(days["2026-10-18"].tasks[0].title, "Night review")
+            self.assertEqual(week.total_seconds, 1500)
+
+            month = task_history("month", "Asia/Dhaka", date(2026, 10, 18), db)
+            self.assertEqual((month.start_date, month.end_date), ("2026-10-01", "2026-10-31"))
+            self.assertEqual(month.total_seconds, 1500)
+
+            item.duration_seconds = 300
+            item.duration_adjustment_seconds = -900
+            db.commit()
+            edited = task_history("week", "Asia/Dhaka", date(2026, 10, 18), db)
+            edited_days = {day.date: day.total_seconds for day in edited.days}
+            self.assertEqual((edited_days["2026-10-17"], edited_days["2026-10-18"]), (300, 0))
+            self.assertEqual(edited.total_seconds, 300)
+
     def test_completed_duration_can_be_added_to_and_subtracted_from(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)

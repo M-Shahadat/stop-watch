@@ -62,6 +62,30 @@ export interface DailyTotal {
   total_seconds: number;
 }
 
+export type HistoryPeriod = "week" | "month";
+
+export interface HistoryTask {
+  task_id: string;
+  title: string;
+  category_name: string | null;
+  category_color: string | null;
+  seconds: number;
+}
+
+export interface HistoryDay {
+  date: string;
+  total_seconds: number;
+  tasks: HistoryTask[];
+}
+
+export interface TaskHistory {
+  period: HistoryPeriod;
+  start_date: string;
+  end_date: string;
+  total_seconds: number;
+  days: HistoryDay[];
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const canRetry = !init?.method || init.method.toUpperCase() === "GET";
   for (let attempt = 0; ; attempt += 1) {
@@ -135,6 +159,10 @@ export const api = {
   listTasks:     () => request<Task[]>("/tasks/"),
   getDailyTotal: () => request<DailyTotal>(
     `/tasks/daily-total?timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`
+  ),
+  getTaskHistory: (period: HistoryPeriod, anchorDate: string) => request<TaskHistory>(
+    `/tasks/history?period=${period}&anchor_date=${encodeURIComponent(anchorDate)}` +
+    `&timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`
   ),
 
   // Categories

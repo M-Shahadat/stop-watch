@@ -1,6 +1,7 @@
 import uuid
-from datetime import datetime, timezone
-from typing import List
+from calendar import monthrange
+from datetime import date, datetime, timedelta, timezone
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -8,8 +9,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..database import get_db
 from ..models import Category, Task, TaskInterval
-from ..schemas import DailyTotalResponse, TaskCreate, TaskResponse, TaskUpdate
-from ..timing import daily_total_seconds, elapsed_seconds, utc
+from ..schemas import (
+    DailyTotalResponse, HistoryDay, HistoryResponse, HistoryTaskItem,
+    TaskCreate, TaskResponse, TaskUpdate,
+)
+from ..timing import daily_task_breakdowns, daily_total_seconds, elapsed_seconds, utc
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -186,6 +190,58 @@ def daily_total(timezone_name: str = "UTC", db: Session = Depends(get_db)):
         db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name
     )
     return DailyTotalResponse(date=day, total_seconds=total)
+
+
+@router.get("/history", response_model=HistoryResponse)
+def task_history(
+    period: Literal["week", "month"], timezone_name: str = "UTC",
+    anchor_date: date | None = None, db: Session = Depends(get_db),
+):
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid time zone") from None
+
+    now = datetime.now(timezone.utc)
+    anchor = anchor_date or now.astimezone(zone).date()
+    if period == "week":
+        start = anchor - timedelta(days=anchor.weekday())
+        end = start + timedelta(days=6)
+    else:
+        start = anchor.replace(day=1)
+        end = anchor.replace(day=monthrange(anchor.year, anchor.month)[1])
+
+    last_day = min(end, now.astimezone(zone).date())
+    days = [
+        start + timedelta(days=offset)
+        for offset in range(max(0, (last_day - start).days + 1))
+    ]
+    breakdowns = daily_task_breakdowns(
+        db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name, days
+    )
+    response_days = []
+    for day, entries in breakdowns:
+        items = [HistoryTaskItem(
+            task_id=task.id,
+            title=task.title,
+            category_name=task.category.name if task.category else None,
+            category_color=task.category.color if task.category else None,
+            seconds=seconds,
+        ) for task, seconds in entries]
+        items.sort(key=lambda item: item.seconds, reverse=True)
+        response_days.append(HistoryDay(
+            date=day.isoformat(),
+            total_seconds=sum(item.seconds for item in items),
+            tasks=items,
+        ))
+
+    return HistoryResponse(
+        period=period,
+        start_date=start.isoformat(),
+        end_date=end.isoformat(),
+        total_seconds=sum(day.total_seconds for day in response_days),
+        days=response_days,
+    )
 
 
 @router.get("/", response_model=List[TaskResponse])

@@ -71,3 +71,25 @@ class TaskResponse(BaseModel):
 class DailyTotalResponse(BaseModel):
     date: str
     total_seconds: int
+
+
+class HistoryTaskItem(BaseModel):
+    task_id: uuid.UUID
+    title: str
+    category_name: Optional[str] = None
+    category_color: Optional[str] = None
+    seconds: int
+
+
+class HistoryDay(BaseModel):
+    date: str
+    total_seconds: int
+    tasks: list[HistoryTaskItem]
+
+
+class HistoryResponse(BaseModel):
+    period: str
+    start_date: str
+    end_date: str
+    total_seconds: int
+    days: list[HistoryDay]

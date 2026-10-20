@@ -1,4 +1,9 @@
 const API_BASE = "/api";
+const GET_RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000];
+
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string) {
@@ -58,21 +63,48 @@ export interface DailyTotal {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    ...init,
-  });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    if (res.status === 401 && path !== "/auth/login") {
-      window.dispatchEvent(new Event("stopwatch:unauthorized"));
+  const canRetry = !init?.method || init.method.toUpperCase() === "GET";
+  for (let attempt = 0; ; attempt += 1) {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        ...init,
+      });
+    } catch (error) {
+      if (canRetry && attempt < GET_RETRY_DELAYS_MS.length && !init?.signal?.aborted) {
+        await wait(GET_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw error;
     }
-    const detail = typeof body?.detail === "string" ? body.detail : null;
-    throw new ApiError(res.status, detail ?? `Request failed (${res.status})`);
+
+    if (canRetry && [502, 503, 504].includes(res.status) && attempt < GET_RETRY_DELAYS_MS.length) {
+      await wait(GET_RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      if (res.status === 401 && path !== "/auth/login") {
+        window.dispatchEvent(new Event("stopwatch:unauthorized"));
+      }
+      const detail = typeof body?.detail === "string" ? body.detail : null;
+      const temporary = [502, 503, 504].includes(res.status);
+      throw new ApiError(res.status, detail ?? (temporary
+        ? "Server temporarily unavailable. Please try again shortly."
+        : `Request failed (${res.status})`));
+    }
+    if (res.status === 204) return undefined as T;
+    if (!res.headers.get("content-type")?.includes("json")) {
+      if (canRetry && attempt < GET_RETRY_DELAYS_MS.length) {
+        await wait(GET_RETRY_DELAYS_MS[attempt]);
+        continue;
+      }
+      throw new ApiError(503, "Server is waking up. Please try again shortly.");
+    }
+    return res.json() as Promise<T>;
   }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
 }
 
 export const api = {

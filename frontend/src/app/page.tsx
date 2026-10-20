@@ -16,6 +16,7 @@ export default function HomePage() {
   const [password, setPassword] = useState("");
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -28,10 +29,27 @@ export default function HomePage() {
   const bump = useCallback(() => setRefreshSignal((n) => n + 1), []);
 
   useEffect(() => {
-    api.getSession().then(setSession).catch((error) => {
-      setAuthError(error instanceof Error ? error.message : "Could not connect to the server");
-      setSession({ authenticated: false, enabled: true });
-    });
+    let active = true;
+    let retryId: ReturnType<typeof setTimeout> | undefined;
+    const connect = async () => {
+      try {
+        const nextSession = await api.getSession();
+        if (active) {
+          setSession(nextSession);
+          setConnectionError(false);
+        }
+      } catch {
+        if (active) {
+          setConnectionError(true);
+          retryId = setTimeout(connect, 5_000);
+        }
+      }
+    };
+    connect();
+    return () => {
+      active = false;
+      if (retryId) clearTimeout(retryId);
+    };
   }, []);
 
   useEffect(() => {
@@ -128,7 +146,18 @@ export default function HomePage() {
   const active    = tasks.filter((t) => t.status === "running" || t.status === "paused");
   const completed = tasks.filter((t) => t.status === "completed");
 
-  if (!session) return <main className="page"><p className="loading">Connecting…</p></main>;
+  if (!session) {
+    return (
+      <main className="page login-page">
+        <div className="login-card connection-card" role="status">
+          <h1 className="page-title">Connecting…</h1>
+          <p>{connectionError
+            ? "The server is taking longer than usual. We’ll keep trying automatically."
+            : "Waking your time tracker. This can take about a minute after inactivity."}</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!session.authenticated) {
     return (

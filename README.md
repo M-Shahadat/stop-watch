@@ -44,6 +44,12 @@ The repository includes `Dockerfile` and `render.yaml` for a single Render web s
 
 The application refuses to start in production without a password and session secret. The API uses an HttpOnly, Secure, SameSite cookie; credentials are never built into the frontend. Render's free web services [spin down after 15 minutes without traffic](https://render.com/docs/free), and waking them can take about a minute. The app retries read requests and keeps the connection screen open while the service wakes. For an always-on app, change the web service to a [paid compute plan](https://render.com/docs/compute-plans) in Render and update the `plan` value in `render.yaml` before syncing the Blueprint again.
 
+### Keep the free Render service awake with GitHub Actions
+
+The included workflow requests the service's `/health` endpoint every five minutes using the GitHub account that hosts this repository. After pushing this workflow, go to **GitHub → repository Settings → Secrets and variables → Actions → Variables → New repository variable**. Set `RENDER_HEALTH_URL` to `https://YOUR-SERVICE.onrender.com/health` (replace the hostname with your actual Render URL). The job is skipped until that variable is set. You can use **Actions → Keep Render awake → Run workflow** to test it.
+
+This is most suitable for a public repository, where standard GitHub-hosted Actions runners are free. In a private repository, frequent runs can exhaust the included Actions minutes. GitHub can delay or drop scheduled runs and disables scheduled workflows in public repositories after 60 days without repository activity, so occasional Render cold starts are still possible. Keeping the Render service active also uses nearly all of its 750 free instance hours in a 31-day month.
+
 ## Data and migrations
 
 Startup creates missing tables and adds the existing category and pause columns when needed. New active intervals are saved when a task is paused or stopped, so the daily total can split time across local midnight. Older tasks have no interval history; their previously recorded time is assigned to their start date. For longer-term production use, replace the startup SQL with versioned migrations before changing the schema again.

@@ -1,0 +1,22 @@
+name: Keep Render awake
+
+on:
+  schedule:
+    # Offset from the top of the hour to reduce GitHub scheduler delays.
+    - cron: '3/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    if: ${{ vars.RENDER_HEALTH_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request health endpoint
+        env:
+          HEALTH_URL: ${{ vars.RENDER_HEALTH_URL }}
+        run: |
+          curl --fail --silent --show-error --max-time 120 \
+            --output /dev/null --write-out 'HTTP %{http_code}\n' \
+            "$HEALTH_URL"

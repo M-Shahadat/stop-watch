@@ -51,22 +51,38 @@ def daily_total_seconds(
     total = 0
     for task in tasks:
         recorded = intervals_by_task.get(task.id, [])
-        total += sum(
+        task_total = sum(
             overlap_seconds(item.started_at, item.ended_at, day_start, day_end)
             for item in recorded
         )
         current_seconds = 0
         if task.status == "running" and task.segment_started_at:
             current_seconds = max(0, int((now - utc(task.segment_started_at)).total_seconds()))
-            total += overlap_seconds(task.segment_started_at, now, day_start, day_end)
+            task_total += overlap_seconds(task.segment_started_at, now, day_start, day_end)
 
         # Older tasks predate interval recording. Their previous active time can
         # only be assigned to their start date, because pause history is unknown.
         recorded_seconds = sum(item.duration_seconds for item in recorded)
+        adjustment = getattr(task, "duration_adjustment_seconds", 0) or 0
         historical_seconds = max(
-            0, elapsed_seconds(task, now) - recorded_seconds - current_seconds
+            0, elapsed_seconds(task, now) - adjustment - recorded_seconds - current_seconds
         )
         if utc(task.started_at).astimezone(local_now.tzinfo).date() == local_now.date():
-            total += historical_seconds
+            task_total += historical_seconds
+
+        if task.status == "completed" and task.stopped_at and adjustment:
+            stopped_day = utc(task.stopped_at).astimezone(local_now.tzinfo).date()
+            if adjustment > 0 and stopped_day == local_now.date():
+                task_total += adjustment
+            elif adjustment < 0 and local_now.date() <= stopped_day:
+                # Remove time from the latest recorded day first, then carry
+                # any remaining subtraction into earlier days.
+                later_seconds = sum(
+                    overlap_seconds(item.started_at, item.ended_at, day_end, utc(task.stopped_at))
+                    for item in recorded
+                )
+                task_total = max(0, task_total - max(0, -adjustment - later_seconds))
+
+        total += task_total
 
     return local_now.date().isoformat(), total

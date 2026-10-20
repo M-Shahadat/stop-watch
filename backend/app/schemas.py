@@ -46,6 +46,7 @@ class TaskCreate(BaseModel):
 class TaskUpdate(BaseModel):
     title: Optional[str] = Field(default=None, max_length=255)
     category_id: Optional[uuid.UUID] = None
+    duration_seconds: Optional[int] = Field(default=None, ge=0, le=2_147_483_647)
 
 
 class TaskResponse(BaseModel):

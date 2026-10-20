@@ -7,12 +7,19 @@ from http.cookies import SimpleCookie
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 
 from fastapi import HTTPException, Response  # noqa: E402
 from app.auth import LoginRequest, authenticated, login  # noqa: E402
+from app.database import Base  # noqa: E402
+from app.models import Task  # noqa: E402
+from app.routers.categories import category_stats  # noqa: E402
+from app.routers.tasks import update_task  # noqa: E402
+from app.schemas import TaskUpdate  # noqa: E402
 from app.timing import daily_total_seconds, elapsed_seconds  # noqa: E402
 
 
@@ -20,7 +27,8 @@ def moment(value: str) -> datetime:
     return datetime.fromisoformat(value).astimezone(timezone.utc)
 
 
-def task(started: str, *, status="completed", accumulated=0, duration=None, segment=None):
+def task(started: str, *, status="completed", accumulated=0, duration=None,
+         segment=None, stopped=None, adjustment=0):
     return SimpleNamespace(
         id=uuid.uuid4(),
         started_at=moment(started),
@@ -28,6 +36,8 @@ def task(started: str, *, status="completed", accumulated=0, duration=None, segm
         accumulated_seconds=accumulated,
         duration_seconds=duration,
         segment_started_at=moment(segment) if segment else None,
+        stopped_at=moment(stopped) if stopped else None,
+        duration_adjustment_seconds=adjustment,
     )
 
 
@@ -76,6 +86,70 @@ class TimingTests(unittest.TestCase):
             daily_total_seconds([item], [segment], moment("2026-11-01T08:00:00+00:00"), "America/New_York"),
             ("2026-11-01", 10800),
         )
+
+    def test_edited_duration_changes_daily_total(self):
+        item = task("2026-10-18T08:00:00+00:00", duration=300,
+                    stopped="2026-10-18T08:10:00+00:00", adjustment=-300)
+        segment = interval(item, "2026-10-18T08:00:00+00:00", "2026-10-18T08:10:00+00:00")
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-18T09:00:00+00:00"), "UTC"),
+            ("2026-10-18", 300),
+        )
+        item.duration_seconds = 900
+        item.duration_adjustment_seconds = 300
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-18T09:00:00+00:00"), "UTC"),
+            ("2026-10-18", 900),
+        )
+
+    def test_subtraction_cannot_make_daily_total_negative(self):
+        item = task("2026-10-17T23:50:00+00:00", duration=100,
+                    stopped="2026-10-18T00:10:00+00:00", adjustment=-1100)
+        segment = interval(item, "2026-10-17T23:50:00+00:00", "2026-10-18T00:10:00+00:00")
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-18T09:00:00+00:00"), "UTC"),
+            ("2026-10-18", 0),
+        )
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-17T23:55:00+00:00"), "UTC"),
+            ("2026-10-17", 100),
+        )
+
+
+class TaskEditTests(unittest.TestCase):
+    def test_completed_duration_can_be_added_to_and_subtracted_from(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            item = Task(title="Review", status="completed",
+                        started_at=moment("2026-10-18T08:00:00+00:00"),
+                        segment_started_at=None,
+                        stopped_at=moment("2026-10-18T08:10:00+00:00"),
+                        accumulated_seconds=600, duration_seconds=600)
+            db.add(item)
+            db.commit()
+            db.refresh(item)
+
+            update_task(item.id, TaskUpdate(duration_seconds=900), db)
+            self.assertEqual((item.duration_seconds, item.duration_adjustment_seconds), (900, 300))
+            update_task(item.id, TaskUpdate(duration_seconds=240), db)
+            self.assertEqual((item.duration_seconds, item.duration_adjustment_seconds), (240, -360))
+            self.assertEqual(category_stats(db).grand_total_active_seconds, 240)
+
+    def test_running_duration_cannot_be_edited(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            item = Task(title="Review", status="running",
+                        started_at=moment("2026-10-18T08:00:00+00:00"),
+                        segment_started_at=moment("2026-10-18T08:00:00+00:00"),
+                        accumulated_seconds=0)
+            db.add(item)
+            db.commit()
+            db.refresh(item)
+            with self.assertRaises(HTTPException) as result:
+                update_task(item.id, TaskUpdate(duration_seconds=60), db)
+            self.assertEqual(result.exception.status_code, 400)
 
 
 class AuthTests(unittest.TestCase):

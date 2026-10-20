@@ -94,7 +94,7 @@ export const api = {
   stopTask:   (id: string) => request<Task>(`/tasks/${id}/stop`,   { method: "PATCH" }),
   deleteTask: (id: string) => request<void>(`/tasks/${id}`,        { method: "DELETE" }),
 
-  updateTask: (id: string, data: { title?: string; category_id?: string | null }) =>
+  updateTask: (id: string, data: { title?: string; category_id?: string | null; duration_seconds?: number }) =>
     request<Task>(`/tasks/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

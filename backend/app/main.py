@@ -38,6 +38,10 @@ async def lifespan(app: FastAPI):
                 "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "
                 "pause_started_at TIMESTAMPTZ"
             ))
+            conn.execute(text(
+                "ALTER TABLE tasks ADD COLUMN IF NOT EXISTS "
+                "duration_adjustment_seconds INTEGER NOT NULL DEFAULT 0"
+            ))
             conn.commit()
 
     yield

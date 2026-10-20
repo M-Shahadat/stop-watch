@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Task, Category, api } from "@/lib/api";
 import { cardScale, formatDuration, formatTime } from "@/lib/format";
 import CategoryBadge from "./CategoryBadge";
+import DurationEditor from "./DurationEditor";
 
 interface Props {
   task: Task;
@@ -30,6 +31,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(task.title);
   const [editCategoryId, setEditCategoryId] = useState(task.category_id ?? "");
+  const [editDurationSeconds, setEditDurationSeconds] = useState(task.duration_seconds ?? 0);
 
   useEffect(() => {
     if (task.status !== "running" || !task.segment_started_at) return;
@@ -75,6 +77,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
       await api.updateTask(task.id, {
         title,
         category_id: editCategoryId || null,
+        ...(task.status === "completed" ? { duration_seconds: editDurationSeconds } : {}),
       });
       setEditing(false);
       onChange();
@@ -88,6 +91,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
   function openEdit() {
     setEditTitle(task.title);
     setEditCategoryId(task.category_id ?? "");
+    setEditDurationSeconds(task.duration_seconds ?? 0);
     setEditing(true);
   }
 
@@ -142,7 +146,15 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
         </div>
       )}
 
-      <div className="task-card__duration">{formatDuration(elapsed)}</div>
+      {editing && status === "completed" ? (
+        <DurationEditor
+          value={editDurationSeconds}
+          onChange={setEditDurationSeconds}
+          disabled={busy}
+        />
+      ) : (
+        <div className="task-card__duration">{formatDuration(elapsed)}</div>
+      )}
 
       <div className="task-card__meta">
         Started {formatTime(task.started_at)}

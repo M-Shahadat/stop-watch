@@ -8,6 +8,7 @@ import DailyTotalBanner from "@/components/DailyTotal";
 import CategoryManager from "@/components/CategoryManager";
 import CategoryStats from "@/components/CategoryStats";
 import HistoryView from "@/components/HistoryView";
+import DayControls from "@/components/DayControls";
 
 type Tab = "tasks" | "week" | "month" | "categories";
 type ViewMode = "grid" | "list";
@@ -253,6 +254,7 @@ export default function HomePage() {
 
       {tab === "tasks" && (
         <>
+          <DayControls onChange={bump} />
           <section className="new-task-section">
             <div className="new-task-section__intro">
               <h2>Start a task</h2>

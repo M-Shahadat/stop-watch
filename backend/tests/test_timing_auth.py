@@ -16,11 +16,14 @@ os.environ.setdefault("DATABASE_URL", "sqlite+pysqlite:///:memory:")
 from fastapi import HTTPException, Response  # noqa: E402
 from app.auth import LoginRequest, authenticated, login  # noqa: E402
 from app.database import Base  # noqa: E402
-from app.models import Task, TaskInterval  # noqa: E402
+from app.models import DailyReset, DaySettings, DaySettingsVersion, Task, TaskInterval  # noqa: E402
 from app.routers.categories import category_stats  # noqa: E402
-from app.routers.tasks import task_history, update_task  # noqa: E402
-from app.schemas import TaskUpdate  # noqa: E402
-from app.timing import daily_total_seconds, elapsed_seconds  # noqa: E402
+from app.routers.tasks import (  # noqa: E402
+    daily_total, get_day_settings, reset_daily_total, task_history,
+    update_day_settings, update_task,
+)
+from app.schemas import DaySettingsPayload, TaskUpdate  # noqa: E402
+from app.timing import daily_task_breakdowns, daily_total_seconds, elapsed_seconds  # noqa: E402
 
 
 def moment(value: str) -> datetime:
@@ -52,6 +55,54 @@ def interval(item, started: str, ended: str):
 
 
 class TimingTests(unittest.TestCase):
+    def test_overnight_schedule_change_does_not_count_overlap_twice(self):
+        item = task("2026-10-20T00:00:00+00:00", duration=28800)
+        segment = interval(item, "2026-10-20T00:00:00+00:00", "2026-10-20T08:00:00+00:00")
+        old = DaySettings(start_time="22:00", end_time="06:00")
+        versions = [DaySettingsVersion(
+            effective_date=date(2026, 10, 20), start_time="00:00", end_time="00:00"
+        )]
+        breakdowns = daily_task_breakdowns(
+            [item], [segment], moment("2026-10-20T08:00:00+00:00"), "UTC",
+            [date(2026, 10, 19), date(2026, 10, 20)], old, versions=versions,
+        )
+        self.assertEqual([entries[0][1] for _, entries in breakdowns], [21600, 7200])
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-20T02:00:00+00:00"),
+                                "UTC", old, versions=versions)[0],
+            "2026-10-19",
+        )
+
+    def test_day_hours_include_only_selected_window(self):
+        item = task("2026-10-18T08:00:00+00:00", duration=14400)
+        segment = interval(item, "2026-10-18T08:00:00+00:00", "2026-10-18T12:00:00+00:00")
+        settings = DaySettings(start_time="09:00", end_time="11:00")
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-18T12:00:00+00:00"), "UTC", settings),
+            ("2026-10-18", 7200),
+        )
+
+    def test_overnight_hours_belong_to_start_date(self):
+        item = task("2026-10-18T21:00:00+00:00", duration=10800)
+        segment = interval(item, "2026-10-18T21:00:00+00:00", "2026-10-19T00:00:00+00:00")
+        settings = DaySettings(start_time="22:00", end_time="02:00")
+        self.assertEqual(
+            daily_total_seconds([item], [segment], moment("2026-10-19T00:00:00+00:00"), "UTC", settings),
+            ("2026-10-18", 7200),
+        )
+
+    def test_reset_hides_prior_time_and_counts_new_time(self):
+        item = task("2026-10-18T09:00:00+00:00", status="running",
+                    accumulated=3600, segment="2026-10-18T11:00:00+00:00")
+        segment = interval(item, "2026-10-18T09:00:00+00:00", "2026-10-18T10:00:00+00:00")
+        reset = DailyReset(day=date(2026, 10, 18), timezone_name="UTC",
+                           reset_at=moment("2026-10-18T11:30:00+00:00"))
+        now = moment("2026-10-18T12:00:00+00:00")
+        self.assertEqual(daily_total_seconds([item], [segment], now, "UTC", resets=[reset]),
+                         ("2026-10-18", 1800))
+        self.assertEqual(daily_task_breakdowns([item], [segment], now, "UTC", [date(2026, 10, 18)],
+                                               resets=[reset])[0][1][0][1], 1800)
+
     def test_running_segment_only_counts_time_after_local_midnight(self):
         item = task("2026-10-17T17:50:00+00:00", status="running",
                     segment="2026-10-17T17:50:00+00:00")
@@ -117,6 +168,117 @@ class TimingTests(unittest.TestCase):
 
 
 class TaskEditTests(unittest.TestCase):
+    def test_applying_hours_today_changes_only_current_and_later_days(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add(DaySettings(id=1, start_time="09:00", end_time="17:00"))
+            item = Task(title="Evening work", status="completed",
+                        started_at=moment("2026-10-19T18:00:00+00:00"),
+                        segment_started_at=None,
+                        stopped_at=moment("2026-10-20T19:00:00+00:00"),
+                        accumulated_seconds=7200, duration_seconds=7200)
+            db.add(item)
+            db.flush()
+            for day in (19, 20):
+                db.add(TaskInterval(
+                    task_id=item.id,
+                    started_at=moment(f"2026-10-{day}T18:00:00+00:00"),
+                    ended_at=moment(f"2026-10-{day}T19:00:00+00:00"),
+                    duration_seconds=3600,
+                ))
+            db.commit()
+
+            with patch("app.routers.tasks.datetime") as clock:
+                clock.now.return_value = moment("2026-10-20T12:00:00+00:00")
+                update_day_settings(DaySettingsPayload(
+                    start_time="08:00", end_time="20:00", start_on="today"
+                ), db)
+                clock.now.return_value = moment("2026-10-21T12:00:00+00:00")
+                week = task_history("week", "UTC", date(2026, 10, 20), db)
+                totals = {day.date: day.total_seconds for day in week.days}
+                self.assertEqual((totals["2026-10-19"], totals["2026-10-20"]), (0, 3600))
+                self.assertEqual([(day.start_time, day.end_time) for day in week.days
+                                  if day.date in ("2026-10-19", "2026-10-20")],
+                                 [("09:00", "17:00"), ("08:00", "20:00")])
+
+    def test_dated_hours_keep_earlier_history_and_replace_pending_change(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            db.add(DaySettings(id=1, start_time="09:00", end_time="17:00"))
+            item = Task(title="Split work", status="completed",
+                        started_at=moment("2026-10-19T10:00:00+00:00"),
+                        segment_started_at=None,
+                        stopped_at=moment("2026-10-21T19:00:00+00:00"),
+                        accumulated_seconds=14400, duration_seconds=14400)
+            db.add(item)
+            db.flush()
+            for start, end in [
+                ("2026-10-19T10:00:00+00:00", "2026-10-19T11:00:00+00:00"),
+                ("2026-10-19T18:00:00+00:00", "2026-10-19T19:00:00+00:00"),
+                ("2026-10-20T18:00:00+00:00", "2026-10-20T19:00:00+00:00"),
+                ("2026-10-21T18:00:00+00:00", "2026-10-21T19:00:00+00:00"),
+            ]:
+                db.add(TaskInterval(task_id=item.id, started_at=moment(start),
+                                    ended_at=moment(end), duration_seconds=3600))
+            db.commit()
+
+            with patch("app.routers.tasks.datetime") as clock:
+                clock.now.return_value = moment("2026-10-20T12:00:00+00:00")
+                scheduled = update_day_settings(
+                    DaySettingsPayload(start_time="08:00", end_time="20:00"), db
+                )
+                self.assertEqual(scheduled.effective_date, "2026-10-21")
+                self.assertEqual((scheduled.active_start_time, scheduled.active_end_time),
+                                 ("09:00", "17:00"))
+                self.assertEqual(db.query(DaySettingsVersion).count(), 2)
+                self.assertEqual(db.get(DaySettingsVersion, date.min).start_time, "09:00")
+
+                replacement = update_day_settings(
+                    DaySettingsPayload(start_time="08:00", end_time="19:30"), db
+                )
+                self.assertEqual(replacement.end_time, "19:30")
+                self.assertEqual(db.query(DaySettingsVersion).count(), 2)
+
+                clock.now.return_value = moment("2026-10-22T12:00:00+00:00")
+                week = task_history("week", "UTC", date(2026, 10, 21), db)
+                totals = {day.date: day.total_seconds for day in week.days}
+                self.assertEqual([totals[f"2026-10-{day}"] for day in (19, 20, 21)],
+                                 [3600, 0, 3600])
+                self.assertEqual([(day.start_time, day.end_time) for day in week.days
+                                  if day.date in ("2026-10-20", "2026-10-21")],
+                                 [("09:00", "17:00"), ("08:00", "19:30")])
+
+    def test_day_settings_and_reset_persist_across_requests(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            update_day_settings(DaySettingsPayload(start_time="08:00", end_time="20:00"), db)
+            self.assertEqual(get_day_settings(db).start_time, "08:00")
+            item = Task(title="Morning work", status="completed",
+                        started_at=moment("2026-10-18T09:00:00+00:00"),
+                        segment_started_at=None,
+                        stopped_at=moment("2026-10-18T09:30:00+00:00"),
+                        accumulated_seconds=1800, duration_seconds=1800)
+            db.add(item)
+            db.flush()
+            db.add(TaskInterval(task_id=item.id,
+                                started_at=moment("2026-10-18T09:00:00+00:00"),
+                                ended_at=moment("2026-10-18T09:30:00+00:00"),
+                                duration_seconds=1800))
+            db.commit()
+            with patch("app.routers.tasks.datetime") as clock:
+                clock.now.return_value = moment("2026-10-18T10:00:00+00:00")
+                self.assertEqual(daily_total("UTC", db).total_seconds, 1800)
+                reset_daily_total("UTC", db)
+                first = db.query(DailyReset).one()
+                self.assertEqual(first.day, date(2026, 10, 18))
+                clock.now.return_value = moment("2026-10-18T11:00:00+00:00")
+                reset_daily_total("UTC", db)
+                self.assertEqual(db.query(DailyReset).count(), 1)
+                self.assertEqual(daily_total("UTC", db).total_seconds, 0)
+
     def test_week_and_month_history_show_overnight_work_and_edits(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)

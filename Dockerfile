@@ -1,16 +1,16 @@
-FROM node:20-alpine AS frontend
-WORKDIR /frontend
+FROM node:22-alpine AS build
+WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-FROM python:3.11-slim
+FROM node:22-alpine
 WORKDIR /app
-COPY backend/requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
-COPY backend/app ./app
-COPY --from=frontend /frontend/out ./static
-ENV STATIC_DIR=/app/static APP_ENV=production
+ENV NODE_ENV=production
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/next.config.ts ./next.config.ts
 EXPOSE 10000
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "./node_modules/.bin/next start --hostname 0.0.0.0 --port ${PORT:-10000}"]

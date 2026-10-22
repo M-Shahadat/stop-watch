@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CategoryBadge from "./CategoryBadge";
 import { api, type HistoryPeriod, type TaskHistory } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
@@ -56,6 +56,8 @@ function periodLabel(history: TaskHistory): string {
 
 export default function HistoryView({ period, refreshSignal }: Props) {
   const [anchorDate, setAnchorDate] = useState(() => localDateString(new Date()));
+  const [trackingDate, setTrackingDate] = useState(() => localDateString(new Date()));
+  const trackingDateRef = useRef(trackingDate);
   const [expandedDate, setExpandedDate] = useState(() => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
@@ -65,6 +67,27 @@ export default function HistoryView({ period, refreshSignal }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    const refreshDate = () => {
+      api.getDailyTotal().then((total) => {
+        if (!active) return;
+        const previous = trackingDateRef.current;
+        const oldYesterday = localDate(previous);
+        oldYesterday.setDate(oldYesterday.getDate() - 1);
+        const newYesterday = localDate(total.date);
+        newYesterday.setDate(newYesterday.getDate() - 1);
+        setAnchorDate((current) => current === previous ? total.date : current);
+        setExpandedDate((current) => current === localDateString(oldYesterday) ? localDateString(newYesterday) : current);
+        trackingDateRef.current = total.date;
+        setTrackingDate(total.date);
+      }).catch(() => {});
+    };
+    refreshDate();
+    const id = setInterval(refreshDate, 60_000);
+    return () => { active = false; clearInterval(id); };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -93,7 +116,7 @@ export default function HistoryView({ period, refreshSignal }: Props) {
   };
 
   const showYesterday = () => {
-    const yesterday = new Date();
+    const yesterday = new Date(`${trackingDate}T12:00:00`);
     yesterday.setDate(yesterday.getDate() - 1);
     const date = localDateString(yesterday);
     setExpandedDate(date);
@@ -105,8 +128,8 @@ export default function HistoryView({ period, refreshSignal }: Props) {
     }
   };
 
-  const today = localDateString(new Date());
-  const yesterday = new Date();
+  const today = trackingDate;
+  const yesterday = new Date(`${trackingDate}T12:00:00`);
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayDate = localDateString(yesterday);
 
@@ -160,6 +183,7 @@ export default function HistoryView({ period, refreshSignal }: Props) {
                   <span className="history-day__chevron" aria-hidden="true">{expanded ? "−" : "+"}</span>
                 </button>
                 {expanded && <div className="history-day__content">
+                  <p className="history-day__hours">Counted hours: {day.start_time}–{day.end_time}</p>
                   {day.tasks.length === 0 ? <p>No tracked time this day.</p> : (
                     <ul className="history-task-list">
                       {day.tasks.map((task) => <li className="history-task" key={task.task_id}>

@@ -62,6 +62,14 @@ export interface DailyTotal {
   total_seconds: number;
 }
 
+export interface DaySettings {
+  start_time: string;
+  end_time: string;
+  active_start_time: string;
+  active_end_time: string;
+  effective_date: string | null;
+}
+
 export type HistoryPeriod = "week" | "month";
 
 export interface HistoryTask {
@@ -75,6 +83,8 @@ export interface HistoryTask {
 export interface HistoryDay {
   date: string;
   total_seconds: number;
+  start_time: string;
+  end_time: string;
   tasks: HistoryTask[];
 }
 
@@ -159,6 +169,18 @@ export const api = {
   listTasks:     () => request<Task[]>("/tasks/"),
   getDailyTotal: () => request<DailyTotal>(
     `/tasks/daily-total?timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`
+  ),
+  getDaySettings: () => request<DaySettings>(
+    `/tasks/day-settings?timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`
+  ),
+  updateDaySettings: (settings: { start_time: string; end_time: string; start_on: "today" | "next_day" }) => request<DaySettings>(
+    `/tasks/day-settings?timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`, {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  }),
+  resetDailyTotal: () => request<DailyTotal>(
+    `/tasks/daily-total/reset?timezone_name=${encodeURIComponent(Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC")}`,
+    { method: "POST" }
   ),
   getTaskHistory: (period: HistoryPeriod, anchorDate: string) => request<TaskHistory>(
     `/tasks/history?period=${period}&anchor_date=${encodeURIComponent(anchorDate)}` +

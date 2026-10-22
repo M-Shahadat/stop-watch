@@ -1,6 +1,6 @@
 import uuid
-from datetime import datetime, timezone
-from sqlalchemy import String, DateTime, Integer, func, ForeignKey
+from datetime import date, datetime, timezone
+from sqlalchemy import String, Date, DateTime, Integer, UniqueConstraint, func, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
@@ -77,3 +77,31 @@ class TaskInterval(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class DaySettings(Base):
+    __tablename__ = "day_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    start_time: Mapped[str] = mapped_column(String(5), nullable=False, default="00:00")
+    end_time: Mapped[str] = mapped_column(String(5), nullable=False, default="00:00")
+
+
+class DaySettingsVersion(Base):
+    """Hours used by tracking days starting on or after effective_date."""
+
+    __tablename__ = "day_settings_versions"
+
+    effective_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    start_time: Mapped[str] = mapped_column(String(5), nullable=False)
+    end_time: Mapped[str] = mapped_column(String(5), nullable=False)
+
+
+class DailyReset(Base):
+    __tablename__ = "daily_resets"
+    __table_args__ = (UniqueConstraint("day", "timezone_name"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    day: Mapped[date] = mapped_column(Date, nullable=False)
+    timezone_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -8,14 +8,46 @@ from sqlalchemy.orm import Session
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from ..database import get_db
-from ..models import Category, Task, TaskInterval
+from ..models import Category, DailyReset, DaySettings, DaySettingsVersion, Task, TaskInterval
 from ..schemas import (
-    DailyTotalResponse, HistoryDay, HistoryResponse, HistoryTaskItem,
+    DailyTotalResponse, DaySettingsPayload, DaySettingsResponse,
+    HistoryDay, HistoryResponse, HistoryTaskItem,
     TaskCreate, TaskResponse, TaskUpdate,
 )
-from ..timing import daily_task_breakdowns, daily_total_seconds, elapsed_seconds, utc
+from ..timing import (
+    day_label, daily_task_breakdowns, daily_total_seconds, elapsed_seconds,
+    settings_for_day, utc,
+)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+
+
+def _day_settings(db: Session) -> DaySettings:
+    return db.get(DaySettings, 1) or DaySettings(id=1, start_time="00:00", end_time="00:00")
+
+
+def _day_versions(db: Session) -> list[DaySettingsVersion]:
+    return db.query(DaySettingsVersion).order_by(DaySettingsVersion.effective_date).all()
+
+
+def _day_settings_response(db: Session, timezone_name: str) -> DaySettingsResponse:
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid time zone") from None
+    baseline = _day_settings(db)
+    versions = _day_versions(db)
+    current_day = day_label(datetime.now(timezone.utc), zone, baseline, versions)
+    active = settings_for_day(current_day, baseline, versions)
+    pending = next((item for item in versions if item.effective_date > current_day), None)
+    shown = pending or active
+    return DaySettingsResponse(
+        start_time=shown.start_time,
+        end_time=shown.end_time,
+        active_start_time=active.start_time,
+        active_end_time=active.end_time,
+        effective_date=pending.effective_date.isoformat() if pending else None,
+    )
 
 
 def _serialize(task: Task) -> TaskResponse:
@@ -187,9 +219,68 @@ def daily_total(timezone_name: str = "UTC", db: Session = Depends(get_db)):
         raise HTTPException(status_code=422, detail="Invalid time zone") from None
     now = datetime.now(timezone.utc)
     day, total = daily_total_seconds(
-        db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name
+        db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name,
+        _day_settings(db), db.query(DailyReset).filter_by(timezone_name=timezone_name).all(),
+        _day_versions(db),
     )
     return DailyTotalResponse(date=day, total_seconds=total)
+
+
+@router.get("/day-settings", response_model=DaySettingsResponse)
+def get_day_settings(db: Session = Depends(get_db), timezone_name: str = "UTC"):
+    return _day_settings_response(db, timezone_name)
+
+
+@router.put("/day-settings", response_model=DaySettingsResponse)
+def update_day_settings(
+    payload: DaySettingsPayload, db: Session = Depends(get_db), timezone_name: str = "UTC",
+):
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid time zone") from None
+    settings = _day_settings(db)
+    versions = _day_versions(db)
+    current_day = day_label(datetime.now(timezone.utc), zone, settings, versions)
+    effective_date = current_day if payload.start_on == "today" else current_day + timedelta(days=1)
+
+    # Preserve the hours that were already used before the first dated change.
+    if not versions:
+        db.add(DaySettingsVersion(
+            effective_date=date.min,
+            start_time=settings.start_time,
+            end_time=settings.end_time,
+        ))
+    db.query(DaySettingsVersion).filter(
+        DaySettingsVersion.effective_date >= effective_date
+    ).delete(synchronize_session="fetch")
+    db.add(DaySettingsVersion(
+        effective_date=effective_date,
+        start_time=payload.start_time,
+        end_time=payload.end_time,
+    ))
+    settings.start_time = payload.start_time
+    settings.end_time = payload.end_time
+    db.add(settings)
+    db.commit()
+    return _day_settings_response(db, timezone_name)
+
+
+@router.post("/daily-total/reset", response_model=DailyTotalResponse)
+def reset_daily_total(timezone_name: str = "UTC", db: Session = Depends(get_db)):
+    try:
+        zone = ZoneInfo(timezone_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(status_code=422, detail="Invalid time zone") from None
+    now = datetime.now(timezone.utc)
+    day = day_label(now, zone, _day_settings(db), _day_versions(db))
+    marker = db.query(DailyReset).filter_by(day=day, timezone_name=timezone_name).one_or_none()
+    if marker:
+        marker.reset_at = now
+    else:
+        db.add(DailyReset(day=day, timezone_name=timezone_name, reset_at=now))
+    db.commit()
+    return DailyTotalResponse(date=day.isoformat(), total_seconds=0)
 
 
 @router.get("/history", response_model=HistoryResponse)
@@ -203,7 +294,10 @@ def task_history(
         raise HTTPException(status_code=422, detail="Invalid time zone") from None
 
     now = datetime.now(timezone.utc)
-    anchor = anchor_date or now.astimezone(zone).date()
+    settings = _day_settings(db)
+    versions = _day_versions(db)
+    current_day = day_label(now, zone, settings, versions)
+    anchor = anchor_date or current_day
     if period == "week":
         start = anchor - timedelta(days=anchor.weekday())
         end = start + timedelta(days=6)
@@ -211,16 +305,19 @@ def task_history(
         start = anchor.replace(day=1)
         end = anchor.replace(day=monthrange(anchor.year, anchor.month)[1])
 
-    last_day = min(end, now.astimezone(zone).date())
+    last_day = min(end, current_day)
     days = [
         start + timedelta(days=offset)
         for offset in range(max(0, (last_day - start).days + 1))
     ]
     breakdowns = daily_task_breakdowns(
-        db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name, days
+        db.query(Task).all(), db.query(TaskInterval).all(), now, timezone_name, days,
+        settings, db.query(DailyReset).filter_by(timezone_name=timezone_name).all(),
+        versions,
     )
     response_days = []
     for day, entries in breakdowns:
+        day_hours = settings_for_day(day, settings, versions)
         items = [HistoryTaskItem(
             task_id=task.id,
             title=task.title,
@@ -232,6 +329,8 @@ def task_history(
         response_days.append(HistoryDay(
             date=day.isoformat(),
             total_seconds=sum(item.seconds for item in items),
+            start_time=day_hours.start_time,
+            end_time=day_hours.end_time,
             tasks=items,
         ))
 

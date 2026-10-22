@@ -95,6 +95,64 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ─── Daily hours and reset ──────────────────────────────────── */
+.day-controls {
+  display: grid;
+  gap: 0.7rem;
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.day-controls__intro h2 { font-size: 1rem; }
+.day-controls__intro p, .day-controls__hint, .day-controls__footer span, .day-controls__status {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+.day-controls__status strong { color: var(--text); font-variant-numeric: tabular-nums; }
+.day-controls__form, .day-controls__footer {
+  display: flex;
+  align-items: end;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.day-controls__form label {
+  display: grid;
+  gap: 0.2rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.day-controls__form input, .day-controls__form select {
+  min-height: 44px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.day-controls__save, .day-controls__reset {
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.day-controls__save:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.day-controls__reset { color: var(--stop-color); background: var(--stop-bg); border-color: rgba(192,57,43,.2); }
+.day-controls__reset:hover:not(:disabled) { background: #ffe4e4; }
+.day-controls__save:disabled, .day-controls__reset:disabled { opacity: 0.5; cursor: default; }
+.day-controls__message { color: #176446; font-size: 0.82rem; }
+
 /* ─── New task form ─────────────────────────────────────────── */
 .new-task-section {
   margin-bottom: 2rem;
@@ -693,6 +751,7 @@ body {
 
 .history-day__content { padding: 0 1rem 0.9rem; border-top: 1px solid var(--border); }
 .history-day__content > p { color: var(--text-muted); font-size: 0.875rem; padding-top: 0.8rem; }
+.history-day__content > .history-day__hours { font-size: 0.78rem; font-weight: 600; }
 .history-task-list { list-style: none; }
 .history-task {
   display: flex;
@@ -985,6 +1044,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .page-header { grid-template-columns: 1fr; gap: 0.9rem; margin-bottom: 1.25rem; }
   .page-header-right { width: 100%; justify-content: space-between; gap: 0.5rem; }
   .daily-total { flex: 1; justify-content: space-between; }
+  .day-controls { padding: 1rem; }
+  .day-controls__form label { flex: 1; min-width: 7rem; }
+  .day-controls__form input, .day-controls__form select { width: 100%; }
+  .day-controls__save { width: 100%; }
   .page-header-controls { grid-column: 1; flex-wrap: wrap; padding-bottom: 0.75rem; }
   .tab-bar { flex: 1 1 100%; min-width: 0; }
   .tab-btn { flex: 1; min-height: 44px; padding: 0.45rem 0.55rem; }

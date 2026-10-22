@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -73,6 +73,20 @@ class DailyTotalResponse(BaseModel):
     total_seconds: int
 
 
+class DaySettingsPayload(BaseModel):
+    start_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    end_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    start_on: Literal["today", "next_day"] = "next_day"
+
+
+class DaySettingsResponse(BaseModel):
+    start_time: str
+    end_time: str
+    active_start_time: str
+    active_end_time: str
+    effective_date: Optional[str] = None
+
+
 class HistoryTaskItem(BaseModel):
     task_id: uuid.UUID
     title: str
@@ -84,6 +98,8 @@ class HistoryTaskItem(BaseModel):
 class HistoryDay(BaseModel):
     date: str
     total_seconds: int
+    start_time: str
+    end_time: str
     tasks: list[HistoryTaskItem]
 
 

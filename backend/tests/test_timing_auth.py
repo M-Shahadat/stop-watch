@@ -322,30 +322,49 @@ class TaskEditTests(unittest.TestCase):
             self.assertEqual((edited_days["2026-10-17"], edited_days["2026-10-18"]), (300, 0))
             self.assertEqual(edited.total_seconds, 300)
 
-    def test_completed_duration_can_be_added_to_and_subtracted_from(self):
+    def test_paused_duration_can_be_added_to_and_subtracted_from(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
         with Session(engine) as db:
-            item = Task(title="Review", status="completed",
+            item = Task(title="Review", status="paused",
                         started_at=moment("2026-10-18T08:00:00+00:00"),
                         segment_started_at=None,
                         stopped_at=moment("2026-10-18T08:10:00+00:00"),
-                        accumulated_seconds=600, duration_seconds=600)
+                        accumulated_seconds=600, duration_seconds=None)
             db.add(item)
             db.commit()
             db.refresh(item)
 
             update_task(item.id, TaskUpdate(duration_seconds=900), db)
-            self.assertEqual((item.duration_seconds, item.duration_adjustment_seconds), (900, 300))
+            self.assertEqual((item.accumulated_seconds, item.duration_adjustment_seconds), (900, 300))
             update_task(item.id, TaskUpdate(duration_seconds=240), db)
-            self.assertEqual((item.duration_seconds, item.duration_adjustment_seconds), (240, -360))
+            self.assertEqual((item.accumulated_seconds, item.duration_adjustment_seconds), (240, -360))
             self.assertEqual(category_stats(db).grand_total_active_seconds, 240)
 
-    def test_running_duration_cannot_be_edited(self):
+    def test_running_edit_keeps_tracking_from_corrected_total(self):
         engine = create_engine("sqlite+pysqlite:///:memory:")
         Base.metadata.create_all(engine)
         with Session(engine) as db:
-            item = Task(title="Review", status="running",
+            item = Task(title="Work", status="running",
+                        started_at=moment("2026-10-18T08:00:00+00:00"),
+                        segment_started_at=moment("2026-10-18T08:00:00+00:00"),
+                        accumulated_seconds=0)
+            db.add(item)
+            db.commit()
+            with patch("app.routers.tasks.datetime") as clock:
+                clock.now.return_value = moment("2026-10-18T08:10:00+00:00")
+                update_task(item.id, TaskUpdate(duration_seconds=120), db)
+            self.assertEqual(item.status, "running")
+            self.assertIsNone(item.duration_seconds)
+            self.assertEqual(item.accumulated_seconds, 120)
+            self.assertEqual(item.duration_adjustment_seconds, -480)
+            self.assertEqual(db.query(TaskInterval).count(), 1)
+
+    def test_completed_duration_cannot_be_edited(self):
+        engine = create_engine("sqlite+pysqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        with Session(engine) as db:
+            item = Task(title="Review", status="completed",
                         started_at=moment("2026-10-18T08:00:00+00:00"),
                         segment_started_at=moment("2026-10-18T08:00:00+00:00"),
                         accumulated_seconds=0)

@@ -285,14 +285,21 @@ async function updateTask(id: string, request: Request): Promise<Response> {
       updates.push(`category_id = $${values.length}`);
     }
     if (Object.hasOwn(payload, "duration_seconds")) {
-      if (task.status !== "completed") throw new ApiError(400, "Only completed tasks can have their time edited");
+      if (task.status === "completed") throw new ApiError(400, "Stopped tasks cannot have their time edited");
       const duration = payload.duration_seconds;
       if (typeof duration !== "number" || !Number.isInteger(duration) || duration < 0 || duration > 2_147_483_647) {
         throw new ApiError(422, "Duration must be a nonnegative whole number of seconds");
       }
       values.push(duration);
-      updates.push(`duration_seconds = $${values.length}`);
-      values.push(task.duration_adjustment_seconds + duration - (task.duration_seconds ?? 0));
+      updates.push(`accumulated_seconds = $${values.length}`);
+      const now = new Date();
+      if (task.status === "running" && task.segment_started_at) {
+        await client.query(`INSERT INTO task_intervals (id, task_id, started_at, ended_at, duration_seconds) VALUES ($1, $2, $3, $4, $5)`,
+          [randomUUID(), id, task.segment_started_at, now, Math.max(0, Math.floor((now.getTime() - task.segment_started_at.getTime()) / 1000))]);
+        values.push(now);
+        updates.push(`segment_started_at = $${values.length}`);
+      }
+      values.push(task.duration_adjustment_seconds + duration - elapsedSeconds(task, now));
       updates.push(`duration_adjustment_seconds = $${values.length}`);
     }
     if (!updates.length) return task;

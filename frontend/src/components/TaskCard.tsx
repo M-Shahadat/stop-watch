@@ -77,7 +77,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
       await api.updateTask(task.id, {
         title,
         category_id: editCategoryId || null,
-        ...(task.status === "completed" ? { duration_seconds: editDurationSeconds } : {}),
+        ...(task.status !== "completed" ? { duration_seconds: editDurationSeconds } : {}),
       });
       setEditing(false);
       onChange();
@@ -91,7 +91,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
   function openEdit() {
     setEditTitle(task.title);
     setEditCategoryId(task.category_id ?? "");
-    setEditDurationSeconds(task.duration_seconds ?? 0);
+    setEditDurationSeconds(elapsedAt(task, Date.now()));
     setEditing(true);
   }
 
@@ -146,7 +146,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
         </div>
       )}
 
-      {editing && status === "completed" ? (
+      {editing && status !== "completed" ? (
         <DurationEditor
           value={editDurationSeconds}
           onChange={setEditDurationSeconds}

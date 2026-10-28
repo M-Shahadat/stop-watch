@@ -1118,3 +1118,10 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .task-card__badge--running { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+.quick-start-categories { display: flex; flex-wrap: wrap; gap: 10px; margin: 16px 0; }
+.quick-start-category { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 12px 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface, transparent); color: inherit; font: inherit; cursor: pointer; }
+.quick-start-category:hover { border-color: currentColor; }
+.quick-start-category:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.quick-start-category:disabled { opacity: .5; cursor: wait; }
+.quick-start-categories + details > summary { cursor: pointer; margin: 12px 0; }

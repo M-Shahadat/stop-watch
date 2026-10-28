@@ -114,15 +114,15 @@ def _task_seconds_on_day(
     if window_start <= utc(task.started_at) < day_end and utc(task.started_at) >= day_start:
         task_total += historical_seconds
 
-    if task.status == "completed" and task.stopped_at and adjustment:
-        stopped = utc(task.stopped_at)
+    if adjustment:
+        stopped = utc(task.stopped_at or task.segment_started_at or task.pause_started_at or now)
         if adjustment > 0 and day_start <= stopped < day_end:
             task_total += adjustment
         elif adjustment < 0 and window_start <= stopped and (not reset_at or stopped >= day_start):
             # Remove time from the latest recorded day first, then carry
             # any remaining subtraction into earlier days.
             later_seconds = sum(
-                overlap_seconds(item.started_at, item.ended_at, day_end, utc(task.stopped_at))
+                overlap_seconds(item.started_at, item.ended_at, day_end, stopped)
                 for item in recorded
             )
             task_total = max(0, task_total - max(0, -adjustment - later_seconds))

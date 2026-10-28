@@ -187,15 +187,20 @@ def update_task(task_id: uuid.UUID, payload: TaskUpdate, db: Session = Depends(g
         task.category_id = payload.category_id  # None clears the category
 
     if "duration_seconds" in payload.model_fields_set:
-        if task.status != "completed":
-            raise HTTPException(status_code=400, detail="Only completed tasks can have their time edited")
+        if task.status == "completed":
+            raise HTTPException(status_code=400, detail="Stopped tasks cannot have their time edited")
         if payload.duration_seconds is None:
             raise HTTPException(status_code=400, detail="Duration must be a number of seconds")
-        previous_duration = task.duration_seconds or 0
+        now = datetime.now(timezone.utc)
+        previous_duration = elapsed_seconds(task, now)
+        if task.status == "running" and task.segment_started_at:
+            db.add(TaskInterval(task_id=task.id, started_at=task.segment_started_at, ended_at=now,
+                duration_seconds=max(0, int((now - utc(task.segment_started_at)).total_seconds()))))
+            task.segment_started_at = now
         task.duration_adjustment_seconds = (
             (task.duration_adjustment_seconds or 0) + payload.duration_seconds - previous_duration
         )
-        task.duration_seconds = payload.duration_seconds
+        task.accumulated_seconds = payload.duration_seconds
 
     db.commit()
     db.refresh(task)

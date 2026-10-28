@@ -96,8 +96,8 @@ function taskSecondsOnDay(
   const taskStart = task.started_at.getTime();
   if (dayStart <= taskStart && taskStart < dayEnd) total += historical;
 
-  if (task.status === "completed" && task.stopped_at && adjustment !== 0) {
-    const stopped = task.stopped_at.getTime();
+  if (adjustment !== 0) {
+    const stopped = (task.stopped_at ?? task.segment_started_at ?? task.pause_started_at ?? now).getTime();
     if (adjustment > 0 && dayStart <= stopped && stopped < dayEnd) {
       total += adjustment;
     } else if (adjustment < 0 && windowStart <= stopped && (!resetAt || stopped >= dayStart)) {

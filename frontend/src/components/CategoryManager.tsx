@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Icon from "./Icon";
 import { Category, api } from "@/lib/api";
 
 const COLOR_PRESETS = [
@@ -112,13 +113,13 @@ export default function CategoryManager({ categories, onChange }: Props) {
             <div key={cat.id} className="cat-manager__row">
               <span className="cat-manager__dot" style={{ background: cat.color }} />
               <span className="cat-manager__name">{cat.name}</span>
-              <button className="cat-manager__icon-btn" title="Edit" onClick={() => startEdit(cat)}>✏️</button>
+              <button className="cat-manager__icon-btn" title="Edit" onClick={() => startEdit(cat)}><Icon name="pencil" /></button>
               <button
                 className="cat-manager__icon-btn cat-manager__icon-btn--delete"
                 title="Delete"
                 disabled={busy === cat.id}
                 onClick={() => handleDelete(cat.id)}
-              >🗑</button>
+              ><Icon name="trash" /></button>
             </div>
           )
         )}

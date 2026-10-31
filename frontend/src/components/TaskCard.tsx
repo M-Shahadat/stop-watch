@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Task, Category, api } from "@/lib/api";
-import { cardScale, formatDuration, formatTime } from "@/lib/format";
+import { formatDuration, formatTime } from "@/lib/format";
 import CategoryBadge from "./CategoryBadge";
+import Icon from "./Icon";
 import DurationEditor from "./DurationEditor";
 
 interface Props {
@@ -95,16 +96,11 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
     setEditing(true);
   }
 
-  const scale = cardScale(elapsed);
-  const minHeight = Math.round(88 + (scale - 1) * 66);
   const { status } = task;
   const isList = viewMode === "list" && !editing;
 
   return (
-    <div
-      className={`task-card task-card--${status}${isList ? " task-card--list" : ""}`}
-      style={isList ? undefined : { minHeight }}
-    >
+    <div className={`task-card task-card--${status}${isList ? " task-card--list" : ""}`}>
       <div className="task-card__header">
         {editing ? (
           <input
@@ -122,7 +118,7 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
           {status === "running" && <span className="task-card__badge task-card__badge--running">Live</span>}
           {status === "paused"  && <span className="task-card__badge task-card__badge--paused">Paused</span>}
           {!editing && (
-            <button className="task-card__edit-btn" aria-label={`Edit ${task.title}`} onClick={openEdit} disabled={busy}>✏️</button>
+            <button className="task-card__edit-btn" aria-label={`Edit ${task.title}`} onClick={openEdit} disabled={busy}><Icon name="pencil" /></button>
           )}
         </div>
       </div>
@@ -157,6 +153,15 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
       )}
 
       <div className="task-card__meta">
+        {/* List mode has no room for the category on its own row, but dropping
+            it altogether cost the denser view the one dimension you scan by.
+            It rides the meta line here instead of disappearing. */}
+        {isList && task.category_name && (
+          <>
+            <CategoryBadge name={task.category_name} color={task.category_color!} small />
+            {" · "}
+          </>
+        )}
         Started {formatTime(task.started_at)}
         {task.stopped_at && ` · Ended ${formatTime(task.stopped_at)}`}
         {task.accumulated_paused_seconds > 0 && (
@@ -174,21 +179,21 @@ export default function TaskCard({ task, categories, viewMode = "grid", onChange
           <>
             {status === "running" && (
               <button className="btn btn--pause" disabled={busy} onClick={() => handle(() => api.pauseTask(task.id))}>
-                ⏸ Pause
+                <Icon name="pause" /> Pause
               </button>
             )}
             {status === "paused" && (
               <button className="btn btn--resume" disabled={busy} onClick={() => handle(() => api.resumeTask(task.id))}>
-                ▶ Resume
+                <Icon name="play" /> Resume
               </button>
             )}
             {(status === "running" || status === "paused") && (
               <button className="btn btn--stop" disabled={busy} onClick={() => handle(() => api.stopTask(task.id))}>
-                ■ Stop
+                <Icon name="stop" /> Stop
               </button>
             )}
             <button className="btn btn--delete" aria-label={`Delete ${task.title}`} disabled={busy} onClick={() => handle(() => api.deleteTask(task.id))}>
-              🗑
+              <Icon name="trash" />
             </button>
           </>
         )}

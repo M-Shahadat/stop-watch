@@ -1,0 +1,6 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - status [ref=e3]:
+      - heading "Connecting…" [level=1] [ref=e4]
+      - paragraph [ref=e5]: Waking your time tracker. This can take about a minute after inactivity.
+  - button "Open Next.js Dev Tools" [ref=e11] [cursor=pointer]

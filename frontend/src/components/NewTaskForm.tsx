@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Icon from "./Icon";
 import { Category, api } from "@/lib/api";
 
 interface Props {
@@ -40,19 +41,17 @@ export default function NewTaskForm({ categories, onCreated }: Props) {
 
   return (
     <section>
-      <h2>Start tracking</h2>
-      <p>Click a category to start its stopwatch.</p>
       <div className="quick-start-categories">
         {categories.map((category) => (
           <button key={category.id} className="quick-start-category" disabled={loading}
             onClick={() => handleStart(category)} aria-label={`Start ${category.name} stopwatch`}>
-            <span style={{ color: category.color }} aria-hidden="true">●</span>
-            <span>{category.name}</span><span aria-hidden="true">▶</span>
+            <span className="quick-start-category__dot" style={{ background: category.color }} aria-hidden="true" />
+            <span>{category.name}</span><Icon name="play" />
           </button>
         ))}
       </div>
       <details open={categories.length === 0}>
-        <summary>Custom task / no category</summary>
+        <summary>Name it, or pick a different category</summary>
     <div className="new-task-form">
       <input
         className="task-input"
@@ -84,7 +83,7 @@ export default function NewTaskForm({ categories, onCreated }: Props) {
         onClick={() => handleStart()}
         disabled={loading}
       >
-        {loading ? "Starting…" : "▶ Start"}
+        {loading ? "Starting…" : <><Icon name="play" /> Start</>}
       </button>
       {error && <p className="error-msg">{error}</p>}
     </div>

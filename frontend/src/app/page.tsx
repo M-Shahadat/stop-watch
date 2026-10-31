@@ -145,7 +145,11 @@ export default function HomePage() {
     bump();
   }
 
-  const active    = tasks.filter((t) => t.status === "running" || t.status === "paused");
+  // Running before paused: the clock that is actually moving is the one the
+  // page is for, so it should never sit below a stopped one.
+  const active    = tasks
+    .filter((t) => t.status === "running" || t.status === "paused")
+    .sort((a, b) => Number(b.status === "running") - Number(a.status === "running"));
   const completed = tasks.filter((t) => t.status === "completed");
 
   if (!session) {
@@ -181,7 +185,6 @@ export default function HomePage() {
     <main className="page">
       <header className="page-header">
         <div className="page-brand">
-          <span className="page-eyebrow">Personal time tracker</span>
           <h1 className="page-title">Stopwatch</h1>
           <p className="page-subtitle">Make the time you spend count.</p>
         </div>
@@ -254,22 +257,17 @@ export default function HomePage() {
 
       {tab === "tasks" && (
         <>
-          <DayControls onChange={bump} />
-          <section className="new-task-section">
-            <div className="new-task-section__intro">
-              <h2>Start a task</h2>
-              <p>Give it a name or start right away.</p>
-            </div>
-            <NewTaskForm categories={categories} onCreated={handleChange} />
-          </section>
-
+          {/* Running work comes first on every screen size. The previous order
+              opened the phone on a day-hours form the user sets once a year,
+              pushing the live stopwatch -- the reason the app exists -- below
+              the fold. */}
           {loading ? (
             <p className="loading">Loading tasks…</p>
           ) : (
             <>
               {active.length > 0 && (
-                <section className="task-section">
-                  <h2 className="section-heading">Active <span className="section-count">{active.length}</span></h2>
+                <section className="task-section task-section--active">
+                  <h2 className="section-heading">Running <span className="section-count">{active.length}</span></h2>
                   <div className={`task-grid task-grid--${viewMode}`}>
                     {active.map((t) => (
                       <TaskCard key={t.id} task={t} categories={categories} viewMode={viewMode} onChange={handleChange} />
@@ -278,9 +276,14 @@ export default function HomePage() {
                 </section>
               )}
 
+              <section className="new-task-section">
+                <h2 className="section-heading">Start a task</h2>
+                <NewTaskForm categories={categories} onCreated={handleChange} />
+              </section>
+
               {completed.length > 0 && (
                 <section className="task-section">
-                  <h2 className="section-heading">Completed <span className="section-count">{completed.length}</span></h2>
+                  <h2 className="section-heading">Earlier today <span className="section-count">{completed.length}</span></h2>
                   <div className={`task-grid task-grid--${viewMode}`}>
                     {completed.map((t) => (
                       <TaskCard key={t.id} task={t} categories={categories} viewMode={viewMode} onChange={handleChange} />
@@ -290,10 +293,13 @@ export default function HomePage() {
               )}
 
               {tasks.length === 0 && (
-                <p className="empty-state">No tasks yet — start your first one above.</p>
+                <p className="empty-state">Nothing tracked yet. Pick a category above to start the clock.</p>
               )}
             </>
           )}
+
+          {/* Set-once configuration, folded away at the end of the page. */}
+          <DayControls onChange={bump} />
         </>
       )}
 

@@ -14,16 +14,3 @@ export function formatTime(iso: string): string {
     minute: "2-digit",
   });
 }
-
-/**
- * Returns a scale factor (1–3) used to grow the task card
- * the longer the task runs. Uses a log curve so differences
- * stay visually distinguishable without extremes.
- */
-export function cardScale(seconds: number): number {
-  if (seconds <= 0) return 1;
-  // log2(seconds+1) / log2(7201) maps 0s→~0, 2h→1. Clamp to [0,1] then to [1,3].
-  const ratio = Math.log2(seconds + 1) / Math.log2(7201);
-  const clamped = Math.min(ratio, 1);
-  return 1 + clamped * 2; // range [1, 3]
-}

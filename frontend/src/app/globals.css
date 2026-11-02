@@ -2,13 +2,14 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  color-scheme: light;
   /* An instrument, not an app chrome. A paper field, one ink, one signal.
      Red is reserved for time that is actually running -- the chronograph
      sweep hand -- so it never appears as decoration anywhere else. */
   --paper:    #f6f6f4;
   --sheet:    #ffffff;
-  --ink:      #1a1a19;
-  --ink-soft: #56564f;   /* 6.83:1 on paper */
+  --ink:      #141413;
+  --ink-soft: #44443e;
   --rule:     #dcdcd7;
   --live:     #c81e2e;   /* 5.27:1 on paper, 5.70:1 under white */
 
@@ -22,13 +23,16 @@
   --text-muted: var(--ink-soft);
   --accent: var(--ink);
   --accent-hover: #000000;
+  --on-accent: #ffffff;
+  --success: #176446;
+  --danger-hover-bg: #ffe4e4;
 
   --running-bg: #fdf7f7;
   --running-border: #eccdd1;
   /* Paused is the absence of an event, so it gets no colour at all. */
   --paused-bg: #f2f2ef;
   --paused-border: #e0e0da;
-  --paused-color: #56564f;
+  --paused-color: var(--ink-soft);
   --stop-bg: transparent;
   --stop-color: var(--live);
   --stop-hover: #a5192a;
@@ -69,6 +73,30 @@
      the same interval. */
   --gap-group:   var(--space-16);  /* sibling cards within a section */
   --gap-section: var(--space-40);  /* one section to the next */
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #151514;
+  --sheet: #20201e;
+  --ink: #f4f4ee;
+  --ink-soft: #c0c0b5;
+  --rule: #494943;
+  --live: #ff8c98;
+  --accent-hover: #ffffff;
+  --on-accent: #151514;
+  --success: #8ed8b5;
+  --danger-hover-bg: #49232b;
+  --running-bg: #2b1e21;
+  --running-border: #70404a;
+  --paused-bg: #252522;
+  --paused-border: #494943;
+  --stop-hover: #ffb4bc;
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
 }
 
 /* Balances ragged edges and pulls lone trailing words up beside their line.
@@ -118,6 +146,42 @@ body {
   font-weight: 600;
   letter-spacing: -0.015em;
   line-height: 1.15;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: var(--space-8);
+  border: 1px solid var(--rule);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.theme-toggle:hover { color: var(--ink); border-color: var(--ink); }
+.theme-toggle__light { display: none; }
+:root[data-theme="dark"] .theme-toggle__dark { display: none; }
+:root[data-theme="dark"] .theme-toggle__light { display: inline-flex; }
+.theme-toggle__dark { display: inline-flex; }
+.theme-toggle__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .page-subtitle { margin-top: var(--space-6); color: var(--text-muted); font-size: 0.9rem; }
@@ -212,9 +276,9 @@ body {
 }
 .day-controls__save:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .day-controls__reset { color: var(--stop-color); background: var(--stop-bg); border-color: rgba(192,57,43,.2); }
-.day-controls__reset:hover:not(:disabled) { background: #ffe4e4; }
+.day-controls__reset:hover:not(:disabled) { background: var(--danger-hover-bg); }
 .day-controls__save:disabled, .day-controls__reset:disabled { opacity: 0.5; cursor: default; }
-.day-controls__message { color: #176446; font-size: 0.82rem; }
+.day-controls__message { color: var(--success); font-size: 0.82rem; }
 
 /* ─── New task form ─────────────────────────────────────────── */
 .new-task-section {
@@ -258,7 +322,7 @@ body {
 .start-btn {
   padding: var(--space-12) var(--space-24);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   border: none;
   border-radius: var(--radius);
   font-size: 1rem;
@@ -376,7 +440,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: var(--space-6);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -584,9 +648,9 @@ body {
 
 .empty-state {
   padding: var(--space-32);
-  border: 1px dashed #cbd7ea;
+  border: 1px dashed var(--rule);
   border-radius: var(--radius);
-  background: rgba(255,255,255,.65);
+  background: var(--sheet);
 }
 
 /* ─── View toggle ────────────────────────────────────────────── */
@@ -679,7 +743,7 @@ body {
 }
 
 .category-badge--small {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   padding: 0;
 }
 
@@ -700,6 +764,7 @@ body {
 }
 
 .task-card__edit-btn {
+  color: var(--ink-soft);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -993,6 +1058,7 @@ body {
 }
 
 .cat-manager__icon-btn {
+  color: var(--ink-soft);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -1303,7 +1369,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   .cat-manager__icon-btn,
   .cat-manager__btn,
   .cat-manager__add-btn,
-  .cat-color-swatch {
+  .cat-color-swatch,
+  .theme-toggle {
     min-height: 44px;
     min-width: 44px;
   }

@@ -1,0 +1,1 @@
+[  171142ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3005/_next/hmr?id=0auWVWExbtrds-dz5UH7p' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3005/_next/static/chunks/node_modules_next_dist_client_1wygxxh5rwq0t._.js:16225

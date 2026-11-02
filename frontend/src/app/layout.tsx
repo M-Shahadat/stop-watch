@@ -33,7 +33,19 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: `
+          (() => {
+            let theme;
+            try { theme = localStorage.getItem("stopwatch-theme"); } catch {}
+            if (theme !== "light" && theme !== "dark") {
+              theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+            }
+            document.documentElement.dataset.theme = theme;
+          })();
+        ` }} />
+      </head>
       <body>{children}</body>
     </html>
   );

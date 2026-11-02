@@ -9,6 +9,7 @@ import CategoryManager from "@/components/CategoryManager";
 import CategoryStats from "@/components/CategoryStats";
 import HistoryView from "@/components/HistoryView";
 import DayControls from "@/components/DayControls";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type Tab = "tasks" | "week" | "month" | "categories";
 type ViewMode = "grid" | "list";
@@ -156,7 +157,10 @@ export default function HomePage() {
     return (
       <main className="page login-page">
         <div className="login-card connection-card" role="status">
-          <h1 className="page-title">Connecting…</h1>
+          <div className="page-title-row">
+            <h1 className="page-title">Connecting…</h1>
+            <ThemeToggle />
+          </div>
           <p>{connectionError
             ? "The server is taking longer than usual. We’ll keep trying automatically."
             : "Waking your time tracker. This can take about a minute after inactivity."}</p>
@@ -169,7 +173,10 @@ export default function HomePage() {
     return (
       <main className="page login-page">
         <form className="login-card" onSubmit={handleLogin}>
-          <h1 className="page-title">Stopwatch</h1>
+          <div className="page-title-row">
+            <h1 className="page-title">Stopwatch</h1>
+            <ThemeToggle />
+          </div>
           <p>Sign in to your time tracker.</p>
           <label htmlFor="password">Password</label>
           <input id="password" className="task-input" type="password" value={password}
@@ -185,7 +192,10 @@ export default function HomePage() {
     <main className="page">
       <header className="page-header">
         <div className="page-brand">
-          <h1 className="page-title">Stopwatch</h1>
+          <div className="page-title-row">
+            <h1 className="page-title">Stopwatch</h1>
+            <ThemeToggle />
+          </div>
           <p className="page-subtitle">Make the time you spend count.</p>
         </div>
         <div className="page-header-right">

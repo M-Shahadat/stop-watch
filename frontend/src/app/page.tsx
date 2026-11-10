@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, type Task, type Category, type Session, api } from "@/lib/api";
+import { selectTodayTasks } from "@/lib/today-tasks";
 import NewTaskForm from "@/components/NewTaskForm";
 import TaskCard from "@/components/TaskCard";
 import DailyTotalBanner from "@/components/DailyTotal";
@@ -148,10 +149,8 @@ export default function HomePage() {
 
   // Running before paused: the clock that is actually moving is the one the
   // page is for, so it should never sit below a stopped one.
-  const active    = tasks
-    .filter((t) => t.status === "running" || t.status === "paused")
-    .sort((a, b) => Number(b.status === "running") - Number(a.status === "running"));
-  const completed = tasks.filter((t) => t.status === "completed");
+  const { active, completed } = selectTodayTasks(tasks);
+  active.sort((a, b) => Number(b.status === "running") - Number(a.status === "running"));
 
   if (!session) {
     return (
@@ -302,8 +301,8 @@ export default function HomePage() {
                 </section>
               )}
 
-              {tasks.length === 0 && (
-                <p className="empty-state">Nothing tracked yet. Pick a category above to start the clock.</p>
+              {active.length === 0 && completed.length === 0 && (
+                <p className="empty-state">Nothing tracked today. Pick a category above to start the clock.</p>
               )}
             </>
           )}
